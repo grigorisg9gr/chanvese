@@ -32,9 +32,10 @@ import matplotlib.pyplot as plt
 
 eps = np.finfo(np.float).eps
     
-def chanvese(I, init_mask, max_its=200, alpha=0.2, thresh=0, color='r', display=False):
+def chanvese(I, init_mask, max_its=200, alpha=0.2, thresh=2, color='r', display=False):
 
     I = I.astype('float')
+    I_flat = I.flat  # flat version of the image I
     #  Create a signed distance map (SDF) from mask
     phi = mask2phi(init_mask)
 
@@ -63,13 +64,13 @@ def chanvese(I, init_mask, max_its=200, alpha=0.2, thresh=0, color='r', display=
             #  find interior and exterior mean
             upts = np.flatnonzero(phi <= 0)                 # interior points
             vpts = np.flatnonzero(phi > 0)                  # exterior points
-            u = np.sum(I.flat[upts])/(len(upts)+eps)  # interior mean
-            v = np.sum(I.flat[vpts])/(len(vpts)+eps)  # exterior mean
+            u = np.sum(I_flat[upts])/(len(upts)+eps)  # interior mean
+            v = np.sum(I_flat[vpts])/(len(vpts)+eps)  # exterior mean
 
-            F = (I.flat[idx]-u)**2-(I.flat[idx]-v)**2    # force from image information
-            curvature = get_curvature(phi,idx)  # force from curvature penalty
+            F = (I_flat[idx]-u)**2-(I_flat[idx]-v)**2    # force from image information
+            curvature = get_curvature(phi, idx)  # force from curvature penalty
 
-            dphidt = F /np.max(np.abs(F)) + alpha*curvature # gradient descent to minimize energy
+            dphidt = F / np.max(np.abs(F)) + alpha*curvature  # gradient descent to minimize energy
 
             #  maintain the CFL condition
             dt = 0.45/(np.max(np.abs(dphidt))+eps)
@@ -80,10 +81,10 @@ def chanvese(I, init_mask, max_its=200, alpha=0.2, thresh=0, color='r', display=
             #  Keep SDF smooth
             phi = sussman(phi, 0.5)
             
-            new_mask = phi<=0
-            c = convergence(prev_mask,new_mask,thresh,c)
+            new_mask = phi <= 0
+            c = convergence(prev_mask, new_mask, thresh, c)
 
-            if c <= 5:
+            if c <= 10:
                 its += 1
                 prev_mask = new_mask
             else:
@@ -153,28 +154,28 @@ def mask2phi(init_a):
     return phi
   
 # compute curvature along SDF
-def get_curvature(phi,idx):
+def get_curvature(phi, idx):
     dimy, dimx = phi.shape       
     yx = np.array([np.unravel_index(i, phi.shape)for i in idx])  # get subscripts
-    y = yx[:,0]
-    x = yx[:,1]
+    y = yx[:, 0]
+    x = yx[:, 1]
 
     # get subscripts of neighbors
     ym1 = y-1; xm1 = x-1; yp1 = y+1; xp1 = x+1;
 
     # bounds checking
-    ym1[ym1<0] = 0; xm1[xm1<0] = 0;              
-    yp1[yp1>=dimy]=dimy - 1; xp1[xp1>=dimx] = dimx - 1;    
+    ym1[ym1 < 0] = 0; xm1[xm1 < 0] = 0
+    yp1[yp1 >= dimy] = dimy - 1; xp1[xp1 >= dimx] = dimx - 1
 
     # get indexes for 8 neighbors
-    idup = np.ravel_multi_index( (yp1,x),phi.shape)
-    iddn = np.ravel_multi_index( (ym1,x),phi.shape)
-    idlt = np.ravel_multi_index( (y,xm1),phi.shape)
-    idrt = np.ravel_multi_index( (y,xp1),phi.shape)
-    idul = np.ravel_multi_index( (yp1,xm1),phi.shape)
-    idur = np.ravel_multi_index( (yp1,xp1),phi.shape)
-    iddl = np.ravel_multi_index( (ym1,xm1),phi.shape)
-    iddr = np.ravel_multi_index( (ym1,xp1),phi.shape)
+    idup = np.ravel_multi_index((yp1, x), phi.shape)
+    iddn = np.ravel_multi_index((ym1, x), phi.shape)
+    idlt = np.ravel_multi_index((y, xm1), phi.shape)
+    idrt = np.ravel_multi_index((y, xp1), phi.shape)
+    idul = np.ravel_multi_index((yp1, xm1), phi.shape)
+    idur = np.ravel_multi_index((yp1, xp1), phi.shape)
+    iddl = np.ravel_multi_index((ym1, xm1), phi.shape)
+    iddr = np.ravel_multi_index((ym1, xp1), phi.shape)
     
     # get central derivatives of SDF at x,y
     phi_x  = -phi.flat[idlt]+phi.flat[idrt]
@@ -188,7 +189,7 @@ def get_curvature(phi,idx):
     
     # compute curvature (Kappa)
     curvature = ( ((phi_x2*phi_yy + phi_y2*phi_xx - 2*phi_x*phi_y*phi_xy)
-                   / (phi_x2 + phi_y2 +eps)**(3/2))
+                   / (phi_x2 + phi_y2 + eps)**(3/2))
                   *(phi_x2 + phi_y2)**(1/2))
 
     return curvature
@@ -265,7 +266,7 @@ def convergence(p_mask, n_mask, thresh, c):
     diff = p_mask - n_mask
     n_diff = np.sum(np.abs(diff))
     if n_diff < thresh:
-        c = c + 1
+        c += 1
     else:
         c = 0
         
