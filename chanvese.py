@@ -133,7 +133,10 @@ def showCurveAndPhi(I, phi, color):
     axes.get_yaxis().set_visible(False)
     
     plt.imshow(I, cmap='gray')
-    CS = plt.contour(phi, 0, colors=color) 
+    try:
+        CS = plt.contour(phi, 0, colors=color)
+    except ValueError:  # sometimes the new mask can raise an error in matplotlib.
+        pass
     plt.draw()
 
     myplot = plt.subplot(122)
@@ -273,9 +276,33 @@ def convergence(p_mask,n_mask,thresh,c):
         
     return c
 
+def define_mask(radius, sh, display=True):
+    """
+    Defines a new mask consisting of dilated points (circles).
+    :param radius:      Radius of dilation.
+    :param sh:          Shape of the mask (should be same as the image size).
+    :param display:     (optional) Display the final mask.
+    :return:            Returns the final mask (numpy float64 2D array).
+    """
+    assert(radius > 2)
+    sh_half = (sh[0]//2, sh[1]//2)
+    cols = np.arange(0, sh_half[1]//radius//2, dtype=np.int32)
+    rows = np.arange(0, 0.9*sh_half[0]//radius//2, dtype=np.int32)
+    rows -= int(np.mean(rows))
+    # define mask_g
+    mask_g = np.zeros(sh, dtype=np.float64)
+    _cols = 4*cols*radius
+    for col in _cols:
+        mask_g[sh_half[0] + rows*4*radius, col] = 1
+    # dilate the points above to shape the final mask
+    mask_f = nd.grey_dilation(mask_g, size=(radius + 1, radius + 1))
+    if display:
+        plt.imshow(mask_f)
+    return mask_f
+
 if __name__ == "__main__":
     img = nd.imread('brain.png', flatten=True)
     mask = np.zeros(img.shape)
     mask[20:100,20:100] = 1
-    
-    chanvese(img,mask,max_its=1000,display=True,alpha=1.0)
+    # mask = define_mask(20, img.shape, display=False)
+    chanvese(img, mask, max_its=1000, display=True, alpha=1.0)
